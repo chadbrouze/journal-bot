@@ -50,7 +50,10 @@ def main():
     
     # Display chat history
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
+        with st.chat_message(
+            message["role"],
+            avatar="assets/alv.jpeg" if message["role"] == "assistant" else "assets/chad.jpeg"
+        ):
             st.write(message["content"])
     
     # User input
@@ -59,12 +62,12 @@ def main():
     if user_input:
         # Add user message to chat
         st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="assets/chad.jpeg"):
             st.write(user_input)
         
         # Get AI response
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
+        with st.chat_message("assistant", avatar="assets/alv.jpeg"):
+            with st.spinner("woofing..."):
                 response = get_response_from_ollama(user_input, journal_content)
                 st.write(response)
         
