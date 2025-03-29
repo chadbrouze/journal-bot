@@ -1,0 +1,10 @@
+{
+    "model": {
+      "type": "ollama",
+      "name": "llama3.1:8b",
+      "api_url": "http://localhost:11434/api/generate"
+    },
+    "journals": {
+      "directory": "data/journals"
+    }
+  }
