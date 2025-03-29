@@ -40,22 +40,22 @@ def main():
             help="Customize how Alv behaves"
         )
     
-    # Month selector - changed from multiselect to single select
+    # Month selector - change from selectbox to multiselect
     months = get_available_months()
     if not months:
         st.error("No journal files found. Please add .md files to the data/journals directory.")
         return
     
-    selected_month = st.selectbox(
-        "Select month to talk to (YYYY-MM format)", 
+    selected_months = st.multiselect(
+        "Select months to talk to (YYYY-MM format)", 
         months
     )
     
-    # Load journal content for selected month
+    # Load journal content for selected months
     journal_content = ""
-    if selected_month:
-        journal_content += f"\n\n=== {selected_month} ===\n\n"
-        journal_content += load_journal(selected_month)
+    for month in selected_months:
+        journal_content += f"\n\n=== {month} ===\n\n"
+        journal_content += load_journal(month)
     
     # Chat interface
     if "messages" not in st.session_state:
