@@ -4,8 +4,10 @@ import glob
 def get_available_months(journal_dir="data/journals"):
     """Get list of available journal months"""
     journal_files = glob.glob(os.path.join(journal_dir, "*.md"))
-    # Extract month names from filenames (assuming format like '2025-02.md' or 'February2025.md')
+    # Extract month names from filenames (assuming format YYYY-MM.md)
     months = [os.path.basename(f).split('.')[0] for f in journal_files]
+    # Sort months chronologically (since they're in YYYY-MM format, string sorting will work)
+    months.sort()
     return months
 
 def load_journal(month, journal_dir="data/journals"):
