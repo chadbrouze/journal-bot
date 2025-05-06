@@ -1,91 +1,103 @@
 import streamlit as st
-import requests
-import json
+import os
 from utils import get_available_months, load_journal
+from dotenv import load_dotenv
 
-# Configuration
-OLLAMA_API = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3.1:8b"  # Change to your preferred model
+# Load environment variables
+load_dotenv()
+TINFOIL_API_KEY = os.getenv("TINFOIL_API_KEY")
 
-def get_response_from_ollama(prompt, context, system_prompt):
-    """Get response from Ollama API"""
-    # Use the system prompt as is, without adding multiple months context
-    full_prompt = f"{system_prompt}\n\nHere are the journal entries:\n{context}\n\nUser: {prompt}\n\nAlv:"
-    
-    # Make request to Ollama API with increased context
-    response = requests.post(
-        OLLAMA_API,
-        json={
-            "model": MODEL_NAME,
-            "prompt": full_prompt,
-            "stream": False,
-            "context_length": 128000
-        }
+try:
+    from tinfoil import TinfoilAI
+    client = TinfoilAI(
+        enclave="llama3-3-70b-p.model.tinfoil.sh",
+        repo="tinfoilsh/confidential-llama3-3-70b-prod",
+        api_key=TINFOIL_API_KEY
     )
-    
-    if response.status_code == 200:
-        return response.json()["response"]
-    else:
-        return f"Error: {response.status_code} - {response.text}"
+    TINFOIL_AVAILABLE = True
+except ImportError:
+    TINFOIL_AVAILABLE = False
 
 def main():
+    st.set_page_config(page_title="Alv - Journal", page_icon="📖")
     st.title("Alv - Your Journal")
     
-    # Add system prompt configuration in sidebar
+    # Sidebar
     with st.sidebar:
-        default_prompt = "You are Alv, a personal AI journal companion. Respond as if you are the journal itself. Limit your answer to a few sentences."
-        system_prompt = st.text_area(
-            "Customize System Prompt",
-            value=default_prompt,
-            help="Customize how Alv behaves"
-        )
+        # API key input if not in environment
+        if not TINFOIL_API_KEY:
+            api_key = st.text_input("Tinfoil API Key", type="password")
+            if api_key:
+                try:
+                    # Recreate client with provided API key
+                    global client
+                    client = TinfoilAI(
+                        enclave="llama3-3-70b-p.model.tinfoil.sh",
+                        repo="tinfoilsh/confidential-llama3-3-70b-prod",
+                        api_key=api_key
+                    )
+                    st.success("API key set")
+                except Exception as e:
+                    st.error(f"Error setting API key: {str(e)}")
+        
+        # Month selector
+        months = get_available_months()
+        if not months:
+            st.error("No journal files found.")
+            return
+        
+        selected_months = st.multiselect("Select months", months)
     
-    # Month selector - change from selectbox to multiselect
-    months = get_available_months()
-    if not months:
-        st.error("No journal files found. Please add .md files to the data/journals directory.")
-        return
-    
-    selected_months = st.multiselect(
-        "Select months to talk to (YYYY-MM format)", 
-        months
-    )
-    
-    # Load journal content for selected months
+    # Load journal content
     journal_content = ""
     for month in selected_months:
         journal_content += f"\n\n=== {month} ===\n\n"
         journal_content += load_journal(month)
     
-    # Chat interface
+    # Chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    # Display chat history
     for message in st.session_state.messages:
-        with st.chat_message(
-            message["role"],
-            avatar="assets/alv.jpeg" if message["role"] == "assistant" else "assets/chad.jpeg"
-        ):
+        avatar = "assets/alv.jpeg" if message["role"] == "assistant" else "assets/chad.jpeg"
+        with st.chat_message(message["role"], avatar=avatar):
             st.write(message["content"])
     
     # User input
     user_input = st.chat_input("Talk to your journal...")
     
-    if user_input:
-        # Add user message to chat
+    if user_input and selected_months:
+        # Add user message
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user", avatar="assets/chad.jpeg"):
             st.write(user_input)
         
         # Get AI response
         with st.chat_message("assistant", avatar="assets/alv.jpeg"):
-            with st.spinner("woofing..."):
-                response = get_response_from_ollama(user_input, journal_content, system_prompt)
+            with st.spinner("Thinking..."):
+                if TINFOIL_AVAILABLE:
+                    try:
+                        system_msg = "You are Alv, a personal AI journal companion. Respond based on the journal entries provided."
+                        
+                        chat_completion = client.chat.completions.create(
+                            messages=[
+                                {"role": "system", "content": system_msg},
+                                {"role": "user", "content": f"Journal entries:\n{journal_content}\n\nUser query: {user_input}"}
+                            ],
+                            model="llama3-3-70b",
+                            max_tokens=8000
+                        )
+                        response = chat_completion.choices[0].message.content
+                    except Exception as e:
+                        response = f"Error: {str(e)}"
+                else:
+                    response = "Tinfoil not installed. Run: pip install tinfoil"
+                
                 st.write(response)
-        
-        # Add AI response to chat
-        st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.messages.append({"role": "assistant", "content": response})
+    
+    elif user_input and not selected_months:
+        st.warning("Please select at least one month.")
 
 if __name__ == "__main__":
     main()
